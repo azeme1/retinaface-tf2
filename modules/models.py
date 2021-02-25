@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.applications import MobileNetV2, ResNet50
 from modules.Resize import Interp
-from tensorflow.keras.layers import Input, Conv2D, ReLU, LeakyReLU, Concatenate, Reshape, Add
+from tensorflow.keras.layers import Input, Conv2D, ReLU, LeakyReLU, Concatenate, Reshape, Add, UpSampling2D
 from modules.anchor import decode_tf, prior_box_tf
 
 
@@ -108,6 +108,16 @@ class FPN:
         self.merge1 = ConvUnit(f=out_ch, k=3, s=1, wd=wd, act=act)
         self.merge2 = ConvUnit(f=out_ch, k=3, s=1, wd=wd, act=act)
 
+    @staticmethod
+    def get_int_div(x_1, x_2):
+        import numpy as np
+        shape_1_2d = np.array(x_1.shape[1:3])
+        shape_2_2d = np.array(x_2.shape[1:3])
+        int_div = shape_1_2d // shape_2_2d
+        float_div  = shape_1_2d / shape_2_2d
+        check_status = (int_div == float_div).all()
+        return check_status, int_div
+
     def __call__(self, x):
         output1 = self.output1(x[0])  # [80, 80, out_ch]
         output2 = self.output2(x[1])  # [40, 40, out_ch]
@@ -116,14 +126,22 @@ class FPN:
         # up_h, up_w = tf.shape(output2)[1], tf.shape(output2)[2]
         # up3 = tf.image.resize(output3, [up_h, up_w], method='nearest')
         # output2 = output2 + up3
-        up3 = Interp(output2.shape[1:3])(output3)
+        use_upsampling, _size = self.get_int_div(output2, output3)
+        if use_upsampling:
+            up3 = UpSampling2D(size=_size)(output3)
+        else:
+            up3 = Interp(output2.shape[1:3])(output3)
         output2 = Add()([output2, up3])
         output2 = self.merge2(output2)
 
         # up_h, up_w = tf.shape(output1)[1], tf.shape(output1)[2]
         # up2 = tf.image.resize(output2, [up_h, up_w], method='nearest')
         # output1 = output1 + up2
-        up2 = Interp(output1.shape[1:3])(output2)
+        use_upsampling, _size = self.get_int_div(output1, output2)
+        if use_upsampling:
+            up2 = UpSampling2D(size=_size)(output2)
+        else:
+            up2 = Interp(output1.shape[1:3])(output2)
         output1 = Add()([output1, up2])
         output1 = self.merge1(output1)
 
