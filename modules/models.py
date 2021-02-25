@@ -244,7 +244,7 @@ class ClassHead():
 
 
 def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
-                    name='RetinaFaceModel', use_bp_preprocess=False):
+                    name='RetinaFaceModel', use_bp_preprocess=False, debug_model=False):
     from tensorflow.keras.models import Model
 
     """Retina Face Model"""
@@ -259,19 +259,22 @@ def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
 
     x = Backbone(backbone_type=backbone_type, use_bp_preprocess=use_bp_preprocess)(x)
 
-    _model = Model(inputs, x)
-    _model.save('model_000_backbone.h5')
+    if debug_model:
+        _model = Model(inputs, x)
+        _model.save('model_000_backbone.hdf5')
 
     fpn = FPN(out_ch=out_ch, wd=wd)(x)
 
-    _model = Model(inputs, fpn)
-    _model.save('model_001_fpn.h5')
+    if debug_model:
+        _model = Model(inputs, fpn)
+        _model.save('model_001_fpn.hdf5')
 
     features = [SSH(out_ch=out_ch, wd=wd, name=f'SSH_{i}')(f)
                 for i, f in enumerate(fpn)]
 
-    _model = Model(inputs, features)
-    _model.save('model_002_features.h5')
+    if debug_model:
+        _model = Model(inputs, features)
+        _model.save('model_002_features.hdf5')
 
     bbox_regressions = Concatenate(axis=1)([BboxHead(num_anchor, wd=wd, name=f'BboxHead_{i}')(f)
                                             for i, f in enumerate(features)])
@@ -282,8 +285,9 @@ def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
 
     classifications = tf.keras.layers.Softmax(axis=-1)(classifications)
 
-    _model = Model(inputs, [bbox_regressions, landm_regressions, classifications])
-    _model.save('model_003_train.h5')
+    if debug_model:
+        _model = Model(inputs, [bbox_regressions, landm_regressions, classifications])
+        _model.save('model_003_train.hdf5')
 
     if training:
         out = (bbox_regressions, landm_regressions, classifications)
