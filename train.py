@@ -29,7 +29,8 @@ def main(_):
     cfg = load_yaml(FLAGS.cfg_path)
 
     # define network
-    model = RetinaFaceModel(cfg, training=True)
+    use_bp_preprocess = True
+    model = RetinaFaceModel(cfg, training=True, use_bp_preprocess=use_bp_preprocess)
     model.summary(line_length=80)
 
     # define prior box
@@ -61,7 +62,7 @@ def main(_):
     manager = tf.train.CheckpointManager(checkpoint=checkpoint,
                                          directory=checkpoint_dir,
                                          max_to_keep=3)
-    if manager.latest_checkpoint:
+    if manager.latest_checkpoint and (not use_bp_preprocess):
         checkpoint.restore(manager.latest_checkpoint)
         print('[*] load ckpt from {} at step {}.'.format(
             manager.latest_checkpoint, checkpoint.step.numpy()))
@@ -112,6 +113,7 @@ def main(_):
                     'learning_rate', optimizer.lr(steps), step=steps)
 
         if steps % cfg['save_steps'] == 0:
+            model.save(f"{str(steps).zfill(8)}_{cfg['sub_name']}.hdf5")
             manager.save()
             print("\n[*] save ckpt file at {}".format(
                 manager.latest_checkpoint))

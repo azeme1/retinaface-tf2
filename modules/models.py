@@ -34,7 +34,7 @@ class BatchNormalization(tf.keras.layers.BatchNormalization):
         return super().call(x, training)
 
 
-def Backbone(backbone_type='ResNet50', use_pretrain=True):
+def Backbone(backbone_type='ResNet50', use_pretrain=True, use_bp_preprocess=False):
     """Backbone Model"""
     weights = None
     if use_pretrain:
@@ -47,23 +47,36 @@ def Backbone(backbone_type='ResNet50', use_pretrain=True):
             pick_layer1 = 80  # [80, 80, 512]
             pick_layer2 = 142  # [40, 40, 1024]
             pick_layer3 = 174  # [20, 20, 2048]
-            preprocess = tf.keras.applications.resnet.preprocess_input
+            if use_bp_preprocess:
+                preprocess = BatchNormalization()
+            else:
+                preprocess = tf.keras.applications.resnet.preprocess_input
         elif backbone_type == 'MobileNetV2':
             extractor = MobileNetV2(
                 input_shape=x.shape[1:], include_top=False, weights=weights)
             pick_layer1 = 54  # [80, 80, 32]
             pick_layer2 = 116  # [40, 40, 96]
             pick_layer3 = 143  # [20, 20, 160]
-            preprocess = tf.keras.applications.mobilenet_v2.preprocess_input
+            if use_bp_preprocess:
+                preprocess = BatchNormalization()
+            else:
+                preprocess = tf.keras.applications.mobilenet_v2.preprocess_input
         else:
             raise NotImplementedError(
                 'Backbone type {} is not recognized.'.format(backbone_type))
 
-        return Model(extractor.input,
-                     (extractor.layers[pick_layer1].output,
-                      extractor.layers[pick_layer2].output,
-                      extractor.layers[pick_layer3].output),
-                     name=backbone_type + '_extrator')(preprocess(x))
+        if use_bp_preprocess:
+            return Model(extractor.input,
+                                     (extractor.layers[pick_layer1].output,
+                                      extractor.layers[pick_layer2].output,
+                                      extractor.layers[pick_layer3].output),
+                                     name=backbone_type + '_extrator')(preprocess(x))
+        else:
+            return Model(extractor.input,
+                         (extractor.layers[pick_layer1].output,
+                          extractor.layers[pick_layer2].output,
+                          extractor.layers[pick_layer3].output),
+                         name=backbone_type + '_extrator')(preprocess(x))
 
     return backbone
 
@@ -231,7 +244,7 @@ class ClassHead():
 
 
 def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
-                    name='RetinaFaceModel'):
+                    name='RetinaFaceModel', use_bp_preprocess=False):
     from tensorflow.keras.models import Model
 
     """Retina Face Model"""
@@ -244,7 +257,7 @@ def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
     # define model
     x = inputs = Input([input_size, input_size, 3], name='input_image')
 
-    x = Backbone(backbone_type=backbone_type)(x)
+    x = Backbone(backbone_type=backbone_type, use_bp_preprocess=use_bp_preprocess)(x)
 
     _model = Model(inputs, x)
     _model.save('model_000_backbone.h5')
@@ -260,15 +273,12 @@ def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
     _model = Model(inputs, features)
     _model.save('model_002_features.h5')
 
-    bbox_regressions = tf.concat(
-        [BboxHead(num_anchor, wd=wd, name=f'BboxHead_{i}')(f)
-         for i, f in enumerate(features)], axis=1)
-    landm_regressions = tf.concat(
-        [LandmarkHead(num_anchor, wd=wd, name=f'LandmarkHead_{i}')(f)
-         for i, f in enumerate(features)], axis=1)
-    classifications = tf.concat(
-        [ClassHead(num_anchor, wd=wd, name=f'ClassHead_{i}')(f)
-         for i, f in enumerate(features)], axis=1)
+    bbox_regressions = Concatenate(axis=1)([BboxHead(num_anchor, wd=wd, name=f'BboxHead_{i}')(f)
+                                            for i, f in enumerate(features)])
+    landm_regressions = Concatenate(axis=1)([LandmarkHead(num_anchor, wd=wd, name=f'LandmarkHead_{i}')(f)
+                                             for i, f in enumerate(features)])
+    classifications = Concatenate(axis=1)([ClassHead(num_anchor, wd=wd, name=f'ClassHead_{i}')(f)
+                                           for i, f in enumerate(features)])
 
     classifications = tf.keras.layers.Softmax(axis=-1)(classifications)
 
