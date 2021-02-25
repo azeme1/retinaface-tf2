@@ -11,7 +11,7 @@ from modules.utils import (set_memory_growth, load_yaml, load_dataset,
                            ProgressBar)
 
 
-flags.DEFINE_string('cfg_path', './configs/retinaface_res50.yaml',
+flags.DEFINE_string('cfg_path', './configs/retinaface_mbv2.yaml',
                     'config file path')
 flags.DEFINE_string('gpu', '0', 'which gpu to use')
 

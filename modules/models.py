@@ -1,7 +1,8 @@
 import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.applications import MobileNetV2, ResNet50
-from tensorflow.keras.layers import Input, Conv2D, ReLU, LeakyReLU
+from modules.Resize import Interp
+from tensorflow.keras.layers import Input, Conv2D, ReLU, LeakyReLU, Concatenate, Reshape, Add
 from modules.anchor import decode_tf, prior_box_tf
 
 
@@ -67,18 +68,18 @@ def Backbone(backbone_type='ResNet50', use_pretrain=True):
     return backbone
 
 
-class ConvUnit(tf.keras.layers.Layer):
+class ConvUnit:
     """Conv + BN + Act"""
     def __init__(self, f, k, s, wd, act=None, name='ConvBN', **kwargs):
-        super(ConvUnit, self).__init__(name=name, **kwargs)
+        # super(ConvUnit, self).__init__(name=name, **kwargs)
         self.conv = Conv2D(filters=f, kernel_size=k, strides=s, padding='same',
                            kernel_initializer=_kernel_init(),
                            kernel_regularizer=_regularizer(wd),
-                           use_bias=False, name='conv')
-        self.bn = BatchNormalization(name='bn')
+                           use_bias=False)
+        self.bn = BatchNormalization()
 
         if act is None:
-            self.act_fn = tf.identity
+            self.act_fn = None# tf.identity
         elif act == 'relu':
             self.act_fn = ReLU()
         elif act == 'lrelu':
@@ -87,14 +88,16 @@ class ConvUnit(tf.keras.layers.Layer):
             raise NotImplementedError(
                 'Activation function type {} is not recognized.'.format(act))
 
-    def call(self, x):
-        return self.act_fn(self.bn(self.conv(x)))
+    def __call__(self, x):
+        if self.act_fn is None:
+            return self.bn(self.conv(x))
+        else:
+            return self.act_fn(self.bn(self.conv(x)))
 
-
-class FPN(tf.keras.layers.Layer):
+class FPN:
     """Feature Pyramid Network"""
     def __init__(self, out_ch, wd, name='FPN', **kwargs):
-        super(FPN, self).__init__(name=name, **kwargs)
+        # super(FPN, self).__init__(name=name, **kwargs)
         act = 'relu'
         if (out_ch <= 64):
             act = 'lrelu'
@@ -105,28 +108,32 @@ class FPN(tf.keras.layers.Layer):
         self.merge1 = ConvUnit(f=out_ch, k=3, s=1, wd=wd, act=act)
         self.merge2 = ConvUnit(f=out_ch, k=3, s=1, wd=wd, act=act)
 
-    def call(self, x):
+    def __call__(self, x):
         output1 = self.output1(x[0])  # [80, 80, out_ch]
         output2 = self.output2(x[1])  # [40, 40, out_ch]
         output3 = self.output3(x[2])  # [20, 20, out_ch]
 
-        up_h, up_w = tf.shape(output2)[1], tf.shape(output2)[2]
-        up3 = tf.image.resize(output3, [up_h, up_w], method='nearest')
-        output2 = output2 + up3
+        # up_h, up_w = tf.shape(output2)[1], tf.shape(output2)[2]
+        # up3 = tf.image.resize(output3, [up_h, up_w], method='nearest')
+        # output2 = output2 + up3
+        up3 = Interp(output2.shape[1:3])(output3)
+        output2 = Add()([output2, up3])
         output2 = self.merge2(output2)
 
-        up_h, up_w = tf.shape(output1)[1], tf.shape(output1)[2]
-        up2 = tf.image.resize(output2, [up_h, up_w], method='nearest')
-        output1 = output1 + up2
+        # up_h, up_w = tf.shape(output1)[1], tf.shape(output1)[2]
+        # up2 = tf.image.resize(output2, [up_h, up_w], method='nearest')
+        # output1 = output1 + up2
+        up2 = Interp(output1.shape[1:3])(output2)
+        output1 = Add()([output1, up2])
         output1 = self.merge1(output1)
 
         return output1, output2, output3
 
 
-class SSH(tf.keras.layers.Layer):
+class SSH:
     """Single Stage Headless Layer"""
     def __init__(self, out_ch, wd, name='SSH', **kwargs):
-        super(SSH, self).__init__(name=name, **kwargs)
+        # super(SSH, self).__init__(name=name, **kwargs)
         assert out_ch % 4 == 0
         act = 'relu'
         if (out_ch <= 64):
@@ -142,7 +149,7 @@ class SSH(tf.keras.layers.Layer):
 
         self.relu = ReLU()
 
-    def call(self, x):
+    def __call__(self, x):
         conv_3x3 = self.conv_3x3(x)
 
         conv_5x5_1 = self.conv_5x5_1(x)
@@ -151,56 +158,64 @@ class SSH(tf.keras.layers.Layer):
         conv_7x7_2 = self.conv_7x7_2(conv_5x5_1)
         conv_7x7 = self.conv_7x7_3(conv_7x7_2)
 
-        output = tf.concat([conv_3x3, conv_5x5, conv_7x7], axis=3)
+        output = Concatenate(axis=3)([conv_3x3, conv_5x5, conv_7x7])
         output = self.relu(output)
 
         return output
 
 
-class BboxHead(tf.keras.layers.Layer):
+class BboxHead():
     """Bbox Head Layer"""
     def __init__(self, num_anchor, wd, name='BboxHead', **kwargs):
-        super(BboxHead, self).__init__(name=name, **kwargs)
+        # super(BboxHead, self).__init__(name=name, **kwargs)
         self.num_anchor = num_anchor
         self.conv = Conv2D(filters=num_anchor * 4, kernel_size=1, strides=1)
 
-    def call(self, x):
-        h, w = tf.shape(x)[1], tf.shape(x)[2]
+    def __call__(self, x):
+        # h, w = tf.shape(x)[1], tf.shape(x)[2]
+        h, w = x.shape[1:3]
         x = self.conv(x)
 
-        return tf.reshape(x, [-1, h * w * self.num_anchor, 4])
+        # return tf.reshape(x, [-1, h * w * self.num_anchor, 4])
+        return Reshape([h * w * self.num_anchor, 4])(x)
 
 
-class LandmarkHead(tf.keras.layers.Layer):
+class LandmarkHead():
     """Landmark Head Layer"""
     def __init__(self, num_anchor, wd, name='LandmarkHead', **kwargs):
-        super(LandmarkHead, self).__init__(name=name, **kwargs)
+        # super(LandmarkHead, self).__init__(name=name, **kwargs)
         self.num_anchor = num_anchor
         self.conv = Conv2D(filters=num_anchor * 10, kernel_size=1, strides=1)
 
-    def call(self, x):
-        h, w = tf.shape(x)[1], tf.shape(x)[2]
+    def __call__(self, x):
+        # h, w = tf.shape(x)[1], tf.shape(x)[2]
+        h, w = x.shape[1:3]
         x = self.conv(x)
 
-        return tf.reshape(x, [-1, h * w * self.num_anchor, 10])
+        # return tf.reshape(x, [-1, h * w * self.num_anchor, 10])
+        return Reshape([h * w * self.num_anchor, 10])(x)
 
 
-class ClassHead(tf.keras.layers.Layer):
+class ClassHead():
     """Class Head Layer"""
     def __init__(self, num_anchor, wd, name='ClassHead', **kwargs):
-        super(ClassHead, self).__init__(name=name, **kwargs)
+        # super(ClassHead, self).__init__(name=name, **kwargs)
         self.num_anchor = num_anchor
         self.conv = Conv2D(filters=num_anchor * 2, kernel_size=1, strides=1)
 
-    def call(self, x):
-        h, w = tf.shape(x)[1], tf.shape(x)[2]
+    def __call__(self, x):
+        # h, w = tf.shape(x)[1], tf.shape(x)[2]
+        h, w = x.shape[1:3]
         x = self.conv(x)
 
-        return tf.reshape(x, [-1, h * w * self.num_anchor, 2])
+        # return tf.reshape(x, [-1, h * w * self.num_anchor, 2])
+        return Reshape([h * w * self.num_anchor, 2])(x)
 
 
 def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
                     name='RetinaFaceModel'):
+    from tensorflow.keras.models import Model
+
     """Retina Face Model"""
     input_size = cfg['input_size'] if training else None
     wd = cfg['weights_decay']
@@ -213,10 +228,19 @@ def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
 
     x = Backbone(backbone_type=backbone_type)(x)
 
+    _model = Model(inputs, x)
+    _model.save('model_000_backbone.h5')
+
     fpn = FPN(out_ch=out_ch, wd=wd)(x)
+
+    _model = Model(inputs, fpn)
+    _model.save('model_001_fpn.h5')
 
     features = [SSH(out_ch=out_ch, wd=wd, name=f'SSH_{i}')(f)
                 for i, f in enumerate(fpn)]
+
+    _model = Model(inputs, features)
+    _model.save('model_002_features.h5')
 
     bbox_regressions = tf.concat(
         [BboxHead(num_anchor, wd=wd, name=f'BboxHead_{i}')(f)
@@ -229,6 +253,9 @@ def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
          for i, f in enumerate(features)], axis=1)
 
     classifications = tf.keras.layers.Softmax(axis=-1)(classifications)
+
+    _model = Model(inputs, [bbox_regressions, landm_regressions, classifications])
+    _model.save('model_003_train.h5')
 
     if training:
         out = (bbox_regressions, landm_regressions, classifications)
