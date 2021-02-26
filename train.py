@@ -62,7 +62,7 @@ def main(_):
     manager = tf.train.CheckpointManager(checkpoint=checkpoint,
                                          directory=checkpoint_dir,
                                          max_to_keep=3)
-    if manager.latest_checkpoint and (not use_bp_preprocess):
+    if manager.latest_checkpoint:
         checkpoint.restore(manager.latest_checkpoint)
         print('[*] load ckpt from {} at step {}.'.format(
             manager.latest_checkpoint, checkpoint.step.numpy()))
