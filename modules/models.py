@@ -243,7 +243,7 @@ class ClassHead():
         return Reshape([h * w * self.num_anchor, 2])(x)
 
 
-def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
+def RetinaFaceModelOriginal(cfg, training=False, iou_th=0.4, score_th=0.02,
                     name='RetinaFaceModel', use_bp_preprocess=False, debug_model=False):
     from tensorflow.keras.models import Model
 
@@ -311,3 +311,108 @@ def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
         out = tf.gather(decode_preds, selected_indices)
 
     return Model(inputs, out, name=name)
+
+def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
+                    name='RetinaFaceModel', use_bp_preprocess=False, debug_model=False):
+    from tensorflow.keras.models import Model
+    from tensorflow.keras.layers import DepthwiseConv2D, Conv2D, ReLU, BatchNormalization, Input, Add, UpSampling2D
+    from tensorflow.keras.layers import Concatenate, Flatten, Reshape, Lambda, Softmax
+
+    """Retina Face Model"""
+    input_size = cfg['input_size'] if training else None
+    wd = cfg['weights_decay']
+    out_ch = cfg['out_channel']
+    num_anchor = len(cfg['min_sizes'][0])
+    backbone_type = cfg['backbone_type']
+
+    # define model
+    x = inputs = Input([input_size, input_size, 3], name='input_image')
+
+    input_size = 640
+    backbone_model = MobileNetV2(input_shape=(input_size, input_size, 3), include_top=False)
+    x = inputs = Input([input_size, input_size, 3], name='input_image')
+    x = BatchNormalization()(x)
+    x = backbone_model(x)
+
+    x = a = Conv2D(256, (1, 1))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = DepthwiseConv2D((5, 5), padding='valid')(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = Conv2D(256, (1, 1))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = DepthwiseConv2D((7, 7), padding='valid')(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = UpSampling2D((2, 2))(x)
+    x = Add()([x, a])
+
+    x = a = Conv2D(256, (1, 1))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = DepthwiseConv2D((5, 5), padding='valid')(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = Conv2D(256, (1, 1))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = DepthwiseConv2D((7, 7), padding='valid')(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = UpSampling2D((2, 2))(x)
+    x = Add()([x, a])
+
+    x = Conv2D(256, (1, 1))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+    x = Conv2D(42 * 16, (1, 1))(x)
+
+    x = Reshape((20 * 20 * 42, 16))(x)
+    bbox_regressions = Lambda(lambda x: x[..., 0:4])(x)
+
+    landm_regressions = Lambda(lambda x: x[..., 4:14])(x)
+
+    classifications = Lambda(lambda x: x[..., 14:16])(x)
+    classifications = Softmax(axis=-1)(classifications)
+
+    # # 2 x 2 x 2 x 2 x 2 x 3 x 5 x 5 x 7
+    # bbox_regressions = Concatenate(axis=1)([BboxHead(num_anchor, wd=wd, name=f'BboxHead_{i}')(f)
+    #                                         for i, f in enumerate(features)]) #(None, 16800, 4)
+    # landm_regressions = Concatenate(axis=1)([LandmarkHead(num_anchor, wd=wd, name=f'LandmarkHead_{i}')(f)
+    #                                          for i, f in enumerate(features)]) #TensorShape([None, 16800, 10])
+    # classifications = Concatenate(axis=1)([ClassHead(num_anchor, wd=wd, name=f'ClassHead_{i}')(f)
+    #                                        for i, f in enumerate(features)])  #TensorShape([None, 16800, 2])
+
+    if training:
+        out = (bbox_regressions, landm_regressions, classifications)
+    else:
+        # only for batch size 1
+        preds = tf.concat(  # [bboxes, landms, landms_valid, conf]
+            [bbox_regressions[0], landm_regressions[0],
+             tf.ones_like(classifications[0, :, 0][..., tf.newaxis]),
+             classifications[0, :, 1][..., tf.newaxis]], 1)
+        priors = prior_box_tf((tf.shape(inputs)[1], tf.shape(inputs)[2]),
+                              cfg['min_sizes'],  cfg['steps'], cfg['clip'])
+        decode_preds = decode_tf(preds, priors, cfg['variances'])
+
+        selected_indices = tf.image.non_max_suppression(
+            boxes=decode_preds[:, :4],
+            scores=decode_preds[:, -1],
+            max_output_size=tf.shape(decode_preds)[0],
+            iou_threshold=iou_th,
+            score_threshold=score_th)
+
+        out = tf.gather(decode_preds, selected_indices)
+
+    return Model(inputs, out, name=name)
+

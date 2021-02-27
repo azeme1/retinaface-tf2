@@ -113,7 +113,9 @@ def main(_):
                     'learning_rate', optimizer.lr(steps), step=steps)
 
         if steps % cfg['save_steps'] == 0:
-            model.save(f"{str(steps).zfill(8)}_{cfg['sub_name']}.hdf5")
+            __keras_file_path = f"./checkpoints/{str(steps).zfill(8)}_{cfg['sub_name']}.hdf5"
+            os.makedirs(os.path.dirname(__keras_file_path))
+            model.save(__keras_file_path)
             manager.save()
             print("\n[*] save ckpt file at {}".format(
                 manager.latest_checkpoint))
