@@ -326,15 +326,31 @@ def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
     backbone_type = cfg['backbone_type']
 
     # define model
-    x = inputs = Input([input_size, input_size, 3], name='input_image')
-
-    input_size = 640
-    backbone_model = MobileNetV2(input_shape=(input_size, input_size, 3), include_top=False)
+    backbone_model = MobileNetV2(input_shape=(input_size, input_size, 3), include_top=False, weights='imagenet')
     x = inputs = Input([input_size, input_size, 3], name='input_image')
     x = BatchNormalization()(x)
     x = backbone_model(x)
 
-    x = a = Conv2D(256, (1, 1))(x)
+    x = a = Conv2D(256, (1, 1), kernel_regularizer=_regularizer(wd))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = DepthwiseConv2D((5, 5), padding='valid', kernel_regularizer=_regularizer(wd))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = Conv2D(256, (1, 1), kernel_regularizer=_regularizer(wd))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = DepthwiseConv2D((7, 7), padding='valid', kernel_regularizer=_regularizer(wd))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    x = UpSampling2D((2, 2))(x)
+    x = Add()([x, a])
+
+    x = a = Conv2D(256, (1, 1), kernel_regularizer=_regularizer(wd))(x)
     x = BatchNormalization()(x)
     x = ReLU()(x)
 
@@ -342,40 +358,21 @@ def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
     x = BatchNormalization()(x)
     x = ReLU()(x)
 
-    x = Conv2D(256, (1, 1))(x)
+    x = Conv2D(256, (1, 1), kernel_regularizer=_regularizer(wd))(x)
     x = BatchNormalization()(x)
     x = ReLU()(x)
 
-    x = DepthwiseConv2D((7, 7), padding='valid')(x)
-    x = BatchNormalization()(x)
-    x = ReLU()(x)
-
-    x = UpSampling2D((2, 2))(x)
-    x = Add()([x, a])
-
-    x = a = Conv2D(256, (1, 1))(x)
-    x = BatchNormalization()(x)
-    x = ReLU()(x)
-
-    x = DepthwiseConv2D((5, 5), padding='valid')(x)
-    x = BatchNormalization()(x)
-    x = ReLU()(x)
-
-    x = Conv2D(256, (1, 1))(x)
-    x = BatchNormalization()(x)
-    x = ReLU()(x)
-
-    x = DepthwiseConv2D((7, 7), padding='valid')(x)
+    x = DepthwiseConv2D((7, 7), padding='valid', kernel_regularizer=_regularizer(wd))(x)
     x = BatchNormalization()(x)
     x = ReLU()(x)
 
     x = UpSampling2D((2, 2))(x)
     x = Add()([x, a])
 
-    x = Conv2D(256, (1, 1))(x)
+    x = Conv2D(256, (1, 1), kernel_regularizer=_regularizer(wd))(x)
     x = BatchNormalization()(x)
     x = ReLU()(x)
-    x = Conv2D(42 * 16, (1, 1))(x)
+    x = Conv2D(42 * 16, (1, 1), kernel_regularizer=_regularizer(wd))(x)
 
     x = Reshape((20 * 20 * 42, 16))(x)
     bbox_regressions = Lambda(lambda x: x[..., 0:4])(x)

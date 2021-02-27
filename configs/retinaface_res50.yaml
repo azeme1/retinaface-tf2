@@ -27,11 +27,11 @@ clip: False
 
 # training setting
 epoch: 100
-init_lr: !!float 1e-3
+init_lr: !!float 1e-2
 lr_decay_epoch: [50, 68]
 lr_rate: 0.1
 warmup_epoch: 5
-min_lr: !!float 1e-4
+min_lr: !!float 1e-3
 
 weights_decay: !!float 5e-4
 momentum: 0.9
