@@ -3,7 +3,7 @@ from absl.flags import FLAGS
 import os
 import tensorflow as tf
 
-from modules.models import RetinaFaceModel
+from modules.models import RetinaFaceModelOriginal as RetinaFaceModel
 from modules.lr_scheduler import MultiStepWarmUpLR
 from modules.losses import MultiBoxLoss
 from modules.anchor import prior_box
