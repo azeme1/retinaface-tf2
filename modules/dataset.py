@@ -161,7 +161,8 @@ def _crop(img, labels, max_loop=250):
     def crop_loop_body(i, img, labels):
         valid_crop = tf.constant(1, tf.int32)
 
-        pre_scale = tf.constant([0.3, 0.45, 0.6, 0.8, 1.0], dtype=tf.float32)
+        # pre_scale = tf.constant([0.3, 0.45, 0.6, 0.8, 1.0], dtype=tf.float32)
+        pre_scale = tf.constant([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], dtype=tf.float32)
         scale = pre_scale[tf.random.uniform([], 0, 5, dtype=tf.int32)]
         short_side = tf.cast(tf.minimum(shape[0], shape[1]), tf.float32)
         h = w = tf.cast(scale * short_side, tf.int32)
