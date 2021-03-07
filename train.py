@@ -29,7 +29,7 @@ def main(_):
     cfg = load_yaml(FLAGS.cfg_path)
 
     # define network
-    use_bp_preprocess = False
+    use_bp_preprocess = True
     model = RetinaFaceModel(cfg, training=True, use_bp_preprocess=use_bp_preprocess)
     model.summary(line_length=80)
 

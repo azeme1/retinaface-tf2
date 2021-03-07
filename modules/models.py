@@ -256,25 +256,6 @@ def RetinaFaceModelOriginal(cfg, training=False, iou_th=0.4, score_th=0.02,
 
     # define model
     x = inputs = Input([input_size, input_size, 3], name='input_image')
-
-    from tensorflow.keras.layers import DepthwiseConv2D
-    x = BatchNormalization()(x)
-    x = DepthwiseConv2D((5, 5), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = ReLU()(x)
-
-    x = Conv2D(3, (1, 1))(x)
-    x = BatchNormalization()(x)
-    x = ReLU()(x)
-
-    x = DepthwiseConv2D((5, 5), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = ReLU()(x)
-
-    x = Conv2D(3, (1, 1))(x)
-    x = BatchNormalization()(x)
-    x = ReLU()(x)
-
     x = Backbone(backbone_type=backbone_type, use_bp_preprocess=use_bp_preprocess)(x)
 
     if debug_model:
