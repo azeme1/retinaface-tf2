@@ -37,3 +37,5 @@ weights_decay: !!float 5e-4
 momentum: 0.9
 
 pretrain: True
+
+save_steps: 3000
