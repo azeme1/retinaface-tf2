@@ -61,6 +61,16 @@ def Backbone(backbone_type='ResNet50', use_pretrain=True, use_bp_preprocess=Fals
                 preprocess = BatchNormalization()
             else:
                 preprocess = tf.keras.applications.mobilenet_v2.preprocess_input
+        elif backbone_type == 'MobileNetV2_0.35':
+            extractor = MobileNetV2(
+                input_shape=x.shape[1:], include_top=False, weights=weights,  alpha=0.35)
+            pick_layer1 = 54  # [80, 80, 32]
+            pick_layer2 = 116  # [40, 40, 96]
+            pick_layer3 = 143  # [20, 20, 160]
+            if use_bp_preprocess:
+                preprocess = BatchNormalization()
+            else:
+                preprocess = tf.keras.applications.mobilenet_v2.preprocess_input
         else:
             raise NotImplementedError(
                 'Backbone type {} is not recognized.'.format(backbone_type))
