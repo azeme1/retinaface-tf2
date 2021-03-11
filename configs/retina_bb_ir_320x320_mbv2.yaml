@@ -6,7 +6,7 @@ sub_name: 'retinaface_mbv2'
 
 # training dataset
 dataset_path: './data/bb_ir_320x320_train_bin.tfrecord'
-dataset_len: 39312  # number of training samples
+dataset_len: 42336  # number of training samples
 using_bin: True
 using_flip: False
 using_distort: True
