@@ -26,7 +26,7 @@ variances: [0.1, 0.2]
 clip: False
 
 # training setting
-epoch: 80
+epoch: 100
 init_lr: !!float 1e-2
 lr_decay_epoch: [50, 68]
 lr_rate: 0.1
