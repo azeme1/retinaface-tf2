@@ -151,7 +151,7 @@ class FPN:
         # output2 = output2 + up3
         use_upsampling, _size = self.get_int_div(output2, output3)
         if use_upsampling:
-            up3 = UpSampling2D(size=_size)(output3)
+            up3 = UpSampling2D(size=_size, interpolation='bilinear')(output3)
         else:
             up3 = Interp(output2.shape[1:3])(output3)
         output2 = Add()([output2, up3])
