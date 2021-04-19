@@ -356,7 +356,7 @@ def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
     x = BatchNormalization()(x)
     x = ReLU()(x)
 
-    x = UpSampling2D((2, 2))(x)
+    x = UpSampling2D((2, 2), interpolation='bilinear')(x)
     x = Add()([x, a])
 
     x = a = Conv2D(256, (1, 1), kernel_regularizer=_regularizer(wd))(x)
@@ -375,7 +375,7 @@ def RetinaFaceModel(cfg, training=False, iou_th=0.4, score_th=0.02,
     x = BatchNormalization()(x)
     x = ReLU()(x)
 
-    x = UpSampling2D((2, 2))(x)
+    x = UpSampling2D((2, 2), interpolation='bilinear')(x)
     x = Add()([x, a])
 
     x = Conv2D(256, (1, 1), kernel_regularizer=_regularizer(wd))(x)
